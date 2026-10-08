@@ -106,12 +106,9 @@ contract GovernanceTest is BaseTest {
         vault.acceptOwnership();
         BaskVault.ProposalData memory d = _data(BaskVault.Action.Guardian, address(0));
         d.target = bob;
-        _run(d);
-        vm.prank(bob);
+        vm.prank(OWNER);
         vm.expectRevert(BaskVault.InvalidAddress.selector);
-        vault.acceptOwnership();
-        d.target = GUARDIAN;
-        _run(d);
+        vault.propose(d);
         vm.prank(bob);
         vault.acceptOwnership();
         assertEq(vault.owner(), bob);
@@ -137,7 +134,7 @@ contract GovernanceTest is BaseTest {
         assertTrue(vault.asset(token).open);
     }
 
-    function testRetirementVoidsProposalsAndSkipsChecksButRedeems() public {
+    function testRetirementVoidsProposalsAndStopsDepositsButRedeems() public {
         _depositAll(100e18);
         address token = address(tokens[0]);
         vm.prank(OWNER);
@@ -155,8 +152,13 @@ contract GovernanceTest is BaseTest {
         assertEq(vault.feedAsset(address(feeds[0])), address(0));
         tokens[0].setReadMode(MockToken.ReadMode.BurnGas);
         feeds[0].setMode(2);
-        (,,, uint256 nav) = vault.previewDeposit(_one(address(tokens[1])), _amount(1e18));
-        assertEq(nav, 200e18);
+        vm.expectRevert(
+            abi.encodeWithSelector(BaskVault.DepositUnavailable.selector, BaskVault.Reason.RetiredBacking, token)
+        );
+        vault.previewDeposit(_one(address(tokens[1])), _amount(1e18));
+        vm.expectRevert(
+            abi.encodeWithSelector(BaskVault.DepositUnavailable.selector, BaskVault.Reason.RetiredBacking, token)
+        );
         vm.prank(alice);
         vault.deposit(_one(address(tokens[1])), _amount(1e18), alice, 0, vm.getBlockTimestamp());
         _redeem(30e18);

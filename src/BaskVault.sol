@@ -70,7 +70,8 @@ contract BaskVault {
         QuoteFeed,
         PoolDeviation,
         NoPoolAge,
-        Freshness
+        Freshness,
+        RetiredBacking
     }
 
     struct Asset {
@@ -428,7 +429,7 @@ contract BaskVault {
                 _poolConfig(d.token, d.pool, d.quoteFeed, d.value);
             }
         } else if (d.action == Action.Guardian) {
-            if (d.target == address(0) || d.target == owner) revert InvalidAddress();
+            if (d.target == address(0) || d.target == owner || d.target == pendingOwner) revert InvalidAddress();
         } else if (d.action == Action.RaiseCap) {
             if (d.value <= NAV_CAP || d.value > 10_000_000_000e18) revert InvalidInput();
         } else if (d.action == Action.FeeRecipient) {
@@ -657,7 +658,11 @@ contract BaskVault {
         for (uint256 i; i < assets.length; ++i) {
             address token = assets[i];
             Asset storage a = _assets[token];
-            if (a.retired) continue;
+            if (a.retired) {
+                // New shares must not acquire backing that was omitted from their deposit NAV.
+                if (managed[token] != 0) return (Reason.RetiredBacking, token, 0, prices);
+                continue;
+            }
             (bool readable, uint256 bal) = _balance(token);
             if (!readable) return (Reason.Unreadable, token, 0, prices);
             uint256 debt = totalOwed[token];
@@ -783,7 +788,7 @@ contract BaskVault {
         returns (uint256[] memory amounts)
     {
         if (block.timestamp > deadline) revert Expired();
-        if (receiver == address(0)) revert InvalidAddress();
+        if (receiver == address(0) || receiver == address(this)) revert InvalidAddress();
         if (shares == 0 || shares > balanceOf[msg.sender]) revert InsufficientShares();
         uint256 supply = totalSupply;
         uint256 fee = _fee(shares);
@@ -794,6 +799,10 @@ contract BaskVault {
         _emitTransfer(msg.sender, address(0), net);
         uint256 count;
         uint256 length = assets.length;
+        // A removed trailing index has no output; its minimum must not disappear.
+        for (uint256 i = length; i < minAmountsOut.length; ++i) {
+            if (minAmountsOut[i] != 0) revert Slippage();
+        }
         uint256[] memory bits = new uint256[]((length + 255) / 256);
         for (uint256 i; i < bits.length; ++i) {
             uint256 word = _managedBits[i];
