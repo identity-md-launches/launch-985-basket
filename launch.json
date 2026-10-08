@@ -1,0 +1,13 @@
+{
+  "kind": "evm_contracts",
+  "contracts": [
+    {
+      "contract": "BaskVault",
+      "constructorArgs": [
+        "0x30B57ECf51D19ABcED7F6f70974e6fBb6f3b9Da3",
+        "0x5ed39AF86f2C00ad99913B5d727bD68f2A904B68"
+      ]
+    }
+  ],
+  "notes": "Basket (BASK), an index vault for Stock Tokens on Robinhood Chain, chain id 4663. Zero initial share supply. Owner configures actual assets, feeds and pools during genesis and finalizes after at least three listings. Fee recipient starts unset and requires a timed proposal. Constructor makes no external calls."
+}
